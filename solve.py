@@ -23,6 +23,11 @@ class Vehicle(object):
         self.time = 0
 
     def time_to_route_begin(self, ride):
+        '''Returns the time it will be when this vehicle can start the ride from current position'''
+        return max(self.time_until_at_beginpoint(ride), ride.earliest_start)
+
+    def time_until_at_beginpoint(self, ride):
+        '''Returns the time it will be when this vehicle will be at the startpoint of the ride.'''
         return self.time + distance(self.row, self.column, ride.row_start, ride.column_start)
 
     def ride(self, ride):
@@ -43,17 +48,20 @@ class Vehicle(object):
         current = (self.row, self.column)
         node = rides.search_nn(current)
         limit = 20
+        # TODO change this limit
+        # don't remove nodes unless time to latest start has been exceeded
         while node is not None and limit > 0:
             candidate_ride = node[0].data
             limit -= 1
             if candidate_ride.can_be_claimed_by(self):
                 rides = rides.remove(candidate_ride)
                 return candidate_ride
-            elif self.time_to_route_begin(candidate_ride) > num_steps:
+            elif self.time_until_at_beginpoint(candidate_ride) > num_steps:
                 print("vehicle end found")
                 return None
-            rides = rides.remove(candidate_ride)
-            node = rides.search_nn(current)
+            else:
+                rides = rides.remove(candidate_ride)
+                node = rides.search_nn(current)
         if limit == 0:
             print("searchlimit exceeded")
 
@@ -74,7 +82,9 @@ class Ride(object):
         return distance(self.row_start, self.column_start, self.row_end, self.column_end)
 
     def can_be_claimed_by(self, vehicle):
-        return (not self.has_been_done) and vehicle.time_to_route_begin(self) + self.ride_time() <= self.latest_finish
+        return (
+            (not self.has_been_done) and
+            vehicle.time_to_route_begin(self) + self.ride_time() <= self.latest_finish)
 
     def __repr__(self):
         return f'Ride #({self.ride_id}) ({self.row_start}, {self.column_start}) to ({self.row_end}, {self.column_end})'
@@ -92,27 +102,23 @@ class Ride(object):
         return 2
 
 def parse_input(filename):
-    global rides
-
-    with open(infilename) as infile:
+    with open(filename) as infile:
+        # parse details of challenge on first line
         line = infile.readline().strip().split()
-        parts = [int(part) for part in line]
-        rows, columns, vehicles_amount, rides_amount, per_ride_bonus, num_steps = parts
-        ride_list = []
-        for ride_id, line in enumerate(infile.readlines()):
-            new = Ride(line, ride_id)
-            ride_list.append(new)
-        rides = kdtree.create(ride_list, dimensions=2)
-    return vehicles_amount, per_ride_bonus, num_steps
+        rows, columns, vehicles_amount, rides_amount, per_ride_bonus, num_steps = [int(part) for part in line]
+        # read in all other lines representing rides
+        ride_list = [Ride(line, ride_id) for ride_id, line in enumerate(infile.readlines())]
+    return vehicles_amount, per_ride_bonus, num_steps, ride_list
 
-def solve(vehicles_amount, per_ride_bonus, num_steps):
+def solve(vehicles_amount, per_ride_bonus, num_steps, ride_list):
+    global rides
     priority_queue = VehiclePriority()
+    rides = kdtree.create(ride_list, dimensions=2)
 
     vehicles = [Vehicle(vehicle_id) for vehicle_id in range(vehicles_amount)]
     for vehicle in vehicles:
         priority_queue.add_vehicle(vehicle)
 
-    # Go over all rides
     while not priority_queue.empty():
         vehicle = priority_queue.get_vehicle()
         did_find_ride = vehicle.calculate_best_route(num_steps)
@@ -126,13 +132,13 @@ def output(vehicles):
             print(str(vehicle), file=outfile)
 
 if __name__ == '__main__':
-    # global variable
+    # TODO global variable -> parameters
     rides = None
 
     infilename = sys.argv[1]
     outfilename = sys.argv[2] if len(sys.argv) == 3 else infilename.split('.')[0] + '.out'
 
     parsed = parse_input(infilename)
-    vehicles_amount, per_ride_bonus, num_steps = parsed
+    vehicles_amount, per_ride_bonus, num_steps, ride_list = parsed
     solution = solve(*parsed)
     output(solution)
