@@ -45,7 +45,7 @@ class Vehicle(object):
 
     def find_closest_ride(self, num_steps):
         global rides
-        current = (self.row, self.column)
+        current = (self.row, self.column, self.time)
         node = rides.search_nn(current)
         limit = 20
         # TODO change this limit
@@ -95,11 +95,13 @@ class Ride(object):
             return self.row_start
         elif i == 1:
             return self.column_start
+        elif i == 2:
+            return self.earliest_start
         else:
             raise NotImplementedError
 
     def __len__(self):
-        return 2
+        return 3
 
 def parse_input(filename):
     with open(filename) as infile:
@@ -113,7 +115,7 @@ def parse_input(filename):
 def solve(vehicles_amount, per_ride_bonus, num_steps, ride_list):
     global rides
     priority_queue = VehiclePriority()
-    rides = kdtree.create(ride_list, dimensions=2)
+    rides = kdtree.create(ride_list, dimensions=3)
 
     vehicles = [Vehicle(vehicle_id) for vehicle_id in range(vehicles_amount)]
     for vehicle in vehicles:
